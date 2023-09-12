@@ -1,3 +1,11 @@
+# 0x0. 前言
+# 本文在对VLLM进行解析时只关注单卡情况，忽略基于ray做分布式推理的所有代码。
+#
+# 0x1. 运行流程梳理
+# 先从使用VLLM调用opt-125M模型进行推理的脚本看起：
+# 可以看到这里创建了一个LLM对象，然后调用了LLM对象的generate函数。
+# 这就是vllm的入口点，接下来我们对LLM这个类的generaet过程进行解析。
+
 from vllm import LLM, SamplingParams
 
 # Sample prompts.

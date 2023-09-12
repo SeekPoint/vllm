@@ -235,8 +235,8 @@ class SchedulerConfig:
 
     def __init__(self, max_num_batched_tokens: int, max_num_seqs: int,
                  max_model_len: int) -> None:
-        self.max_num_batched_tokens = max_num_batched_tokens
-        self.max_num_seqs = max_num_seqs
+        self.max_num_batched_tokens = max_num_batched_tokens  #包含了prefill阶段和decode阶段的token
+        self.max_num_seqs = max_num_seqs #是请求数量
         self.max_model_len = max_model_len
 
 

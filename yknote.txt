@@ -1,0 +1,38 @@
+https://zhuanlan.zhihu.com/p/649977422
+VLLM推理流程梳理（二）  BBuf
+https://zhuanlan.zhihu.com/p/649974825
+VLLM推理流程梳理（一）  BBuf
+
+https://zhuanlan.zhihu.com/p/643336063
+LLM推理框架2：vLLM源码学习   ===简单代码分析
+
+https://zhuanlan.zhihu.com/p/642852847
+LLM推理框架1：exllama学习
+
+https://zhuanlan.zhihu.com/p/649052223
+LLM推理框架3：llama.cpp/koboldcpp学习
+
+
+
+
+https://zhuanlan.zhihu.com/p/645251151
+vLLM框架top down概览
+
+https://zhuanlan.zhihu.com/p/641999400  ==架构描述，有图，非代码级别
+LLM 高速推理框架 vLLM 源代码分析 / vLLM Source Code Analysis
+
+
+https://zhuanlan.zhihu.com/p/648759542
+[Paper Reading] 针对 LLM Inference 的调度: Fast Distributed Inference Serving for Large Language Models
+
+https://blog.csdn.net/qq_41185868/article/details/131428046
+LLMs：《vLLM: Easy, Fast, and Cheap LLM Serving with PagedAttention》翻译与解读
+
+
+
+PS C:\yk_repo\vllm\0.1.3> git checkout -b br0.1.3 aa84c92ef636e689b506b9842c712e5c615cc73a
+Switched to a new branch 'br0.1.3'
+PS C:\yk_repo\vllm\0.1.3> git branch
+* br0.1.3
+  main
+PS C:\yk_repo\vllm\0.1.3>
