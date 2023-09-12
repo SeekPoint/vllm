@@ -15,7 +15,7 @@ LLM推理框架3：llama.cpp/koboldcpp学习
 
 
 
-https://zhuanlan.zhihu.com/p/645251151
+https://zhuanlan.zhihu.com/p/645251151 ==架构描述，有图，非代码级别
 vLLM框架top down概览
 
 https://zhuanlan.zhihu.com/p/641999400  ==架构描述，有图，非代码级别
