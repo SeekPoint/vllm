@@ -392,6 +392,11 @@ class LLMEngine:
         and updates the scheduler with the model outputs. Finally, it decodes
         the sequences and returns the newly generated results.
         """
+
+        # 0x6.ModelExecution
+        # 接下来我们对Model
+        # Execution做一个介绍，ModelExecution是scheduler.schedule函数之后执行的，对应这几行代码：
+
         # 首先，调用 self.scheduler.schedule() 进行调度，返回要在下一次迭代中执行的序列，
         # 以及要被换入，换出，复制的 token 块。
         seq_group_metadata_list, scheduler_outputs = self.scheduler.schedule()
@@ -408,6 +413,12 @@ class LLMEngine:
                 RequestOutput.from_seq_group(seq_group)
                 for seq_group in scheduler_outputs.ignored_seq_groups
             ]
+
+        # 这里调用了worker的execute_model函数来做模型的推理，在模型推理中比较特殊的一点就是使用了PagedAttention，
+        # 以及如果在模型执行前传入的SchedulerOutputs对象中的swap in / out
+        # 的blocks，blocks_to_copy等不空的话，我们需要在获取KV Cache之间做一个全局同步让Block相关的操作做完，
+        # 这是通过在Transformer的每一层插入一个cuda Event来实现的。
+        # 这里我们来分析一下模型执行过程里面最核心的部分也就是PagedAttention。
 
         # Execute the model.
         # 如果 scheduler_outputs 不为空，那么就会执行模型，将 seq_group_metadata_list、
