@@ -3,7 +3,8 @@ from typing import List, Optional, Union
 
 _SAMPLING_EPS = 1e-5
 
-
+# d、推理参数
+# 推理参数在sampling_params.py文件中。通常不需要修改。
 class SamplingParams:
     """Sampling parameters for text generation.
 

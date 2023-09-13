@@ -19,10 +19,10 @@ prompts = [
 sampling_params = SamplingParams(temperature=0.8, top_p=0.95)
 
 # Create an LLM.
-llm = LLM(model="facebook/opt-125m")
+llm = LLM(model="facebook/opt-125m")  #加载自定义的模型结构
 # Generate texts from the prompts. The output is a list of RequestOutput objects
 # that contain the prompt, generated text, and other information.
-outputs = llm.generate(prompts, sampling_params)
+outputs = llm.generate(prompts, sampling_params) #根据采样参数和prompt推理结果
 # Print the outputs.
 for output in outputs:
     prompt = output.prompt

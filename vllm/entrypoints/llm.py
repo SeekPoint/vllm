@@ -9,7 +9,8 @@ from vllm.outputs import RequestOutput
 from vllm.sampling_params import SamplingParams
 from vllm.utils import Counter
 
-
+# a、模型加载LLM(model=model_path)
+# 其中LLM类加载模型时首先根据参数生成llm_engine类
 class LLM:
     """An LLM for generating texts from given prompts and sampling parameters.
 
@@ -89,6 +90,7 @@ class LLM:
             seed=seed,
             **kwargs,
         )
+        #根据参数生成llm_engine,包含model,tokenizer, cache，并行参数等
         self.llm_engine = LLMEngine.from_engine_args(engine_args)
         # 初始化一个名为request_counter的Counter对象，用于请求计数。
         self.request_counter = Counter()
@@ -182,6 +184,8 @@ def _add_request(
     self.llm_engine.add_request(request_id, prompt, sampling_params,
                                 prompt_token_ids)
 
+# b、推理生成llm.generate(prompts, sampling_params)
+# 推理时，LLM的generate()会调用_run_engine()函数
 # 这个函数负责运行 self.llm_engine的step函数，并收集已完成的请求的输出。
 def _run_engine(self, use_tqdm: bool) -> List[RequestOutput]:
     # Initialize tqdm.
@@ -195,10 +199,10 @@ def _run_engine(self, use_tqdm: bool) -> List[RequestOutput]:
     # 主要的循环在引擎有未完成的请求时持续运行。在每个步骤中，通过调用引擎的 step 方法来处理请求。
     # 如果输出表示已完成的请求，则将其添加到 outputs 列表中。如果使用 tqdm，进度条将相应地更新。
     while self.llm_engine.has_unfinished_requests():
-        step_outputs = self.llm_engine.step()
+        step_outputs = self.llm_engine.step()  #每次生成单个token
         for output in step_outputs:
             if output.finished:
-                outputs.append(output)
+                outputs.append(output) #添加到输出中
                 if use_tqdm:
                     pbar.update(1)
     # 如果使用了 tqdm，此代码段将关闭进度条。

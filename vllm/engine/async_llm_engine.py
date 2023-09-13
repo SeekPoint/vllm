@@ -228,7 +228,7 @@ class AsyncLLMEngine:
         # Initialize the cluster.
         distributed_init_method, placement_group = initialize_cluster(
             parallel_config, engine_args.engine_use_ray)
-        # Create the async LLM engine.
+        # Create the async LLM engine.  类的初始化
         engine = cls(engine_args.worker_use_ray,
                      engine_args.engine_use_ray,
                      *engine_configs,

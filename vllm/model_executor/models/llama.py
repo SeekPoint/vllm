@@ -129,15 +129,16 @@ class LlamaAttention(nn.Module):
         input_metadata: InputMetadata,
         cache_event: Optional[torch.cuda.Event],
     ) -> torch.Tensor:
-        qkv, _ = self.qkv_proj(hidden_states)
+        qkv, _ = self.qkv_proj(hidden_states)  #采用了分块计算
         q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
         k_cache, v_cache = kv_cache
+        #pageAttention优化，并将RoPE一起合并到cuda计算中
         attn_output = self.attn(positions, q, k, v, k_cache, v_cache,
                                 input_metadata, cache_event)
-        output, _ = self.o_proj(attn_output)
+        output, _ = self.o_proj(attn_output)  #采用了分块计算
         return output
 
-
+# LlamaDecoderLayer类主要包含了LlamaAttention和LlamaMLP。
 class LlamaDecoderLayer(nn.Module):
 
     def __init__(self, config: LlamaConfig):
@@ -168,24 +169,24 @@ class LlamaDecoderLayer(nn.Module):
     ) -> torch.Tensor:
         # Self Attention
         residual = hidden_states
-        hidden_states = self.input_layernorm(hidden_states)
-        hidden_states = self.self_attn(
+        hidden_states = self.input_layernorm(hidden_states)  # RMSNorm
+        hidden_states = self.self_attn( #attention计算
             positions=positions,
             hidden_states=hidden_states,
             kv_cache=kv_cache,
             input_metadata=input_metadata,
             cache_event=cache_event,
         )
-        hidden_states = residual + hidden_states
+        hidden_states = residual + hidden_states   #残差Add
 
         # Fully Connected
         residual = hidden_states
-        hidden_states = self.post_attention_layernorm(hidden_states)
-        hidden_states = self.mlp(hidden_states)
-        hidden_states = residual + hidden_states
+        hidden_states = self.post_attention_layernorm(hidden_states) # RMSNorm
+        hidden_states = self.mlp(hidden_states)   #MLP线性层
+        hidden_states = residual + hidden_states  #残差Add
         return hidden_states
 
-
+# 其中LlamaModel包含embed、N个decoder和norm处理。
 class LlamaModel(nn.Module):
 
     def __init__(self, config: LlamaConfig):
@@ -210,6 +211,7 @@ class LlamaModel(nn.Module):
         input_metadata: InputMetadata,
         cache_events: Optional[List[torch.cuda.Event]],
     ) -> torch.Tensor:
+        # 首先对token进行embed处理
         hidden_states = self.embed_tokens(input_ids)
         for i in range(len(self.layers)):
             if cache_events is None:
@@ -217,6 +219,7 @@ class LlamaModel(nn.Module):
             else:
                 cache_event = cache_events[i]
             layer = self.layers[i]
+            #N次decode处理
             hidden_states = layer(
                 positions,
                 hidden_states,
@@ -224,10 +227,11 @@ class LlamaModel(nn.Module):
                 input_metadata,
                 cache_event,
             )
+        # RMSNorm处理
         hidden_states = self.norm(hidden_states)
         return hidden_states
 
-
+# c、LLaMA模型推理
 class LlamaForCausalLM(nn.Module):
 
     def __init__(self, config):
@@ -250,8 +254,10 @@ class LlamaForCausalLM(nn.Module):
         input_metadata: InputMetadata,
         cache_events: Optional[List[torch.cuda.Event]],
     ) -> Dict[int, SequenceOutputs]:
+        #通过llama模型得到输出状态
         hidden_states = self.model(input_ids, positions, kv_caches,
                                    input_metadata, cache_events)
+        #根据参数对结果进行采样得到next_token
         next_tokens = self.sampler(self.lm_head.weight, hidden_states,
                                    input_metadata)
         return next_tokens

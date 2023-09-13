@@ -230,6 +230,10 @@ class PagedAttention(nn.Module):
             # Prompt run.
             assert input_metadata.num_generation_tokens == 0
             self.set_attn_bias(input_metadata)
+            '''
+            在attn计算中，当第一次生成时，需要计算之前的全部历史prompt信息，
+            这时使用的是multi_query_kv_attention()函数中调用了xformers库的xops.memory_efficient_attention_forward()函数。
+            '''
             self.multi_query_kv_attention(
                 output[:num_prompt_tokens],
                 query[:num_prompt_tokens],
@@ -266,6 +270,9 @@ class PagedAttention(nn.Module):
                 "key_cache and value_cache must be provided when "
                 "generating tokens.")
             # Compute the attention op for generation tokens.
+
+            #当第一次处理完成后，会将k、v数据进行缓存，下一次生成时，每次只需要输入单个pre_token进行处理即可，
+            # 调用的函数为single_query_cached_kv_attention()，里面采用了自定义的cuda实现进行加速。
             self.single_query_cached_kv_attention(
                 output[num_prompt_tokens:num_valid_tokens],
                 query[num_prompt_tokens:num_valid_tokens], key_cache,

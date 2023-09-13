@@ -4,7 +4,7 @@ import torch.nn as nn
 
 from vllm import layernorm_ops
 
-
+# RMSNorm类采用了Cuda实现进行加速
 class RMSNorm(nn.Module):
     """Root mean square normalization.
 
@@ -23,7 +23,7 @@ class RMSNorm(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         out = torch.empty_like(x)
-        layernorm_ops.rms_norm(
+        layernorm_ops.rms_norm(  #自定义的cuda实现
             out,
             x,
             self.weight.data,

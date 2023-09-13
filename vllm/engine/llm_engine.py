@@ -78,7 +78,11 @@ class LLMEngine:
         
     从LLMEngine的定义可以知道，它做了初始化tokenizer，
     创建并行的worker信息以及初始化KV Cache等事情，
-    这里的worker是每个GPU对应一个，我们稍后会讲到。    
+    这里的worker是每个GPU对应一个，我们稍后会讲到。   
+    
+    llm_engine类在创建时会加载tokenizer，
+    创建Worker（负责加载模型，执行推理）和Scheduler（负责并行计算），
+    同时预分配内存。 
     """
     def __init__(
         self,
@@ -111,7 +115,7 @@ class LLMEngine:
         self.log_stats = log_stats
         self._verify_args()
 
-        # 设置tokenizer
+        # 设置tokenizer  加载tokenizer，
         self.tokenizer = get_tokenizer(
             model_config.tokenizer,
             tokenizer_mode=model_config.tokenizer_mode,
@@ -128,9 +132,9 @@ class LLMEngine:
 
         # 初始化这个 engine 的 KV cache。
         # Profile the memory usage and initialize the cache.
-        self._init_cache()
+        self._init_cache()  #分配内存
 
-        # Create the scheduler.
+        # Create the scheduler.  并行计算预处理
         self.scheduler = Scheduler(scheduler_config, cache_config)
 
         # Logging.
@@ -231,10 +235,11 @@ class LLMEngine:
         # 使用_run_workers方法来获取可以在GPU和CPU上分配的最大块数量。
         # _run_workers函数执行的方法是profile_num_available_blocks，并且提供了如块大小、
         # GPU内存使用率和CPU交换空间等参数，所有这些参数都是从cache_config对象中提取出来的。
+        # 根据参数确定多少个block
         num_blocks = self._run_workers(
             "profile_num_available_blocks",
             get_all_outputs=True,
-            block_size=self.cache_config.block_size,
+            block_size=self.cache_config.block_size, #每个transformerBlock的size，固定大小
             gpu_memory_utilization=self.cache_config.gpu_memory_utilization,
             cpu_swap_space=self.cache_config.swap_space_bytes,
         )
@@ -264,7 +269,18 @@ class LLMEngine:
         # Initialize the cache.
         # 使用_run_workers方法初始化缓存。此步骤中的_run_workers执行的方法
         # 是init_cache_engine，并且提供了cache_config对象作为参数。
+        # 根据block数目在cpu和gpu中创建内存
         self._run_workers("init_cache_engine", cache_config=self.cache_config)
+
+        '''
+由于使用了PageAttention技术，内存按照Block分配，其中Blocksize是TransformerBlock的size。
+其中GPU Block通过如下计算
+        GPUBlockSize = ( gpuMemoryUtilization * 当前显卡总的内存 - 当前已使用内存(加载模型) )  /    TransFormerBlockSize
+CPU Block通过如下计算
+        CPUBlockSize = CpuSwapSize /  TransFormerBlockSize
+其中gpu_memory_utilization默认为0.9， cpu_swap_space默认4个G。
+若gpu_memory_utilization参数过小(分配的内存大小低于模型使用内存)或者过大(接近1.0)时，代码会崩溃。
+        '''
 
     # from_engine_args是一个类方法（classmethod），这意味着它可以在没有创建类实例的情况下调用。
     # 此方法需要接受一个EngineArgs类型的参数engine_args，并返回一个LLMEngine类型的对象。
@@ -430,7 +446,7 @@ class LLMEngine:
         # blocks_to_swap_in、blocks_to_swap_out 和 blocks_to_copy 作为参数传给 _run_workers
         # 方法。这一步可能包括将一些状态从内存移到 GPU，执行模型计算，以及将一些状态从 GPU 移回内存。
         output = self._run_workers(
-            "execute_model",
+            "execute_model",  #运行worker类中的 execute_model()
             seq_group_metadata_list=seq_group_metadata_list,
             blocks_to_swap_in=scheduler_outputs.blocks_to_swap_in,
             blocks_to_swap_out=scheduler_outputs.blocks_to_swap_out,
@@ -442,9 +458,9 @@ class LLMEngine:
 
         # Decode the sequences.
         # 然后对序列进行解码，并终止满足停止条件的序列。完成的序列组将被释放。
-        self._decode_sequences(seq_groups)
+        self._decode_sequences(seq_groups)  #对输出结果进行解码
         # Stop the sequences that meet the stopping criteria.
-        self._stop_sequences(seq_groups)
+        self._stop_sequences(seq_groups)  #判断结尾str是否和stop_str一致，一致则修改状态为已完成
         # Free the finished sequence groups.
         self.scheduler.free_finished_seq_groups()
 

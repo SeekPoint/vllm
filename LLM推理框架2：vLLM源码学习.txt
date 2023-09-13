@@ -1,0 +1,115 @@
+https://zhuanlan.zhihu.com/p/643336063
+LLM推理框架2：vLLM源码学习   ===简单代码分析
+
+
+1、vLLM
+vLLM 是在加州大学伯克利分校开发，配备了PagedAttention的vLLM重新定义了 LLM 服务的最新技术水平：
+它的吞吐量比 HuggingFace Transformers 高出 24 倍，且无需更改任何模型架构
+
+通过Python/C++/CUDA 实现。
+
+vLLM: Easy, Fast, and Cheap LLM Serving with PagedAttention  ==论文  https://vllm.ai/
+
+https://github.com/vllm-project/vllm
+
+PageAttention技术
+在 self-attention 中，计算速度比内存速度快得多，因此进程(操作)越来越多地受到内存(HBM)访问的瓶颈。
+PagedAttention是vLLM的核心技术，它解决了LLM服务中内存的瓶颈问题。
+传统的注意力算法在自回归解码过程中，需要将所有输入令牌的注意力键和值张量存储在GPU内存中，以生成下一个令牌。
+这些缓存的键和值张量通常被称为KV缓存。
+
+PagedAttention采用了虚拟内存和分页的经典思想，允许在非连续的内存空间中存储连续的键和值。
+通过将每个序列的KV缓存划分为块，PagedAttention可以高效地进行注意力计算。PagedAttention的内存利用效率接近最优，仅浪费不到4%的内存。
+此外，PagedAttention还支持高效的内存共享，进一步减少了复杂采样算法的内存开销，提高了吞吐量。
+
+动图  005.webp  006.webp
+
+continuous batching
+之前不了解continuous batching，根据 @哦哦啊 的提醒，查阅了相关资料，补充一下。
+
+https://www.anyscale.com/blog/continuous-batching-llm-inference
+
+Due to the large GPU memory footprint and compute cost of LLMs,
+serving dominates the compute cost for most real world applications.
+ML engineers often treat LLMs like "black boxes" that can only be optimized with internal changes
+such as quantization and custom CUDA kernels. However, this is not entirely the case.
+Because LLMs iteratively generate their output, and because LLM inference is often memory and not compute bound,
+there are surprisingsystem-levelbatching optimizations that make 10x or more differences in real-world workloads.
+
+总结：绝大部分优化是模型量化和自定义CUDA优化（很多推理框架都做了，所以没有明显优势），但是目前对于LLM来说，IO和内存问题比计算更重要。
+007.webp
+
+LLM inference is memory-IO bound, not compute bound.
+In other words, it currently takes more time to load 1MB of data
+to the GPU’s compute cores than it does for those compute cores to perform LLM computations on 1MB of data.
+This means that LLM inference throughput is largely
+determined by how large a batch you can fit into high-bandwidth GPU memory.
+See this page in the NVIDIA docs for more details.
+
+总结：IO花费时间更长，瓶颈取决于batch size（单次可以加载的数据量）
+
+
+Naive batching / static batching（静态batch处理）
+如果所有的batch都同时结束（比如达到max token时结束），GPU完美使用，但这实际上很少发生。
+008.webp
+通常情况为，batch szie保持不变，当max token越大时，不同batch结束的位置差异越大，GPU利用率越低。
+
+
+Continuous batching（连续/动态batch处理）
+参考论文：Orca: A Distributed Serving System for Transformer-Based Generative Models
+迭代调度处理，当部分序列处理完成，插入新序列。
+009.webp
+
+
+
+benchmark测试
+
+As expected, the static batchers and naive continuous batchers perform approximately identically for lower-variance generation lengths.
+However as the variance increases, naive static batching’s performance plummets to 81 token/s.
+FasterTransformers improves upon naive static batching significantly,
+nearly keeping up with the naive continuous batchers until generation length limit of 1536.
+Continuous batching on Ray Serve and text-generation-inference achieves about the same performance,
+which is what we expect since they use the same batching algorithm.
+
+What is most impressive here is vLLM.
+For each dataset, vLLM more than doubles performance compared to naive continuous batching.
+We have not analyzed what optimization contributes the most to vLLM performance the most,
+but we suspect vLLM’s ability to reserve space dynamically instead of ahead-of-time allows vLLM to dramatically increase the batch size.
+
+总计：llm推理截止是随机的，当max token较小时，batch间不同序列生成的长度差异不大，
+可以认为大致是一起开始一起推理结束，GPU利用最大化，生成速度也相差无几。
+当max token增加至1536时，普通推理的GPU利用率较低，使用Continuous batching的利用率明显更高，生成速度更快。
+
+
+
+2、配置环境并运行
+# 方法1
+
+pip install vllm  # This may take 5-10 minutes.
+# 方法2
+
+git clone https://github.com/vllm-project/vllm.git
+cd vllm
+pip install -e .  # This may take 5-10 minutes.
+# 方法3
+
+git clone https://github.com/vllm-project/vllm.git
+cd vllm
+python setup.py install  # This may take 5-10 minutes.
+安装的时候可能会报cuda版本和pytorch版本不一致的问题，可以多种方法尝试，
+也可以去conda/env/xxx/python3.xx/site-packages中注释掉torch.utils中的版本检查注释的代码
+
+安装完成后，运行examples/offline_inference.py即可，命令行运行
+
+python examples/offline_inference.py
+
+
+。。。
+
+
+总结：
+vLLM使用了PageAttention技术，对模型推理进行加速。
+
+但实际测试中，单batch的推理和HuggingFace的推理相比，并无明显优势。多batch推理时，有明显速度优势。
+
+编辑于 2023-08-19 21:16・IP 属地浙江
