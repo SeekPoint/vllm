@@ -381,6 +381,11 @@ class LLMEngine:
         """Returns True if there are unfinished requests."""
         return self.scheduler.has_unfinished_seqs()
 
+    # 逻辑还是很清晰的，首先调用scheduler.schedule()
+    # 得到scheduler_outputs，scheduler_outputs中包含了swap_in、swap_out等映射，
+    # 通过worker的execute_model得到逻辑输出，使用scheduler.update对输出进行更新，将使用完的block置换出。
+    # 然后对已经完成的seq解码，更新seq状态，返回输出。
+
     # 这个函数是 LLMEngine 类的一个关键函数，其功能是执行一次解码迭代并返回新生成的结果。
     # 这个函数的执行过程可以分解为以下步骤：
     def step(self) -> List[RequestOutput]:

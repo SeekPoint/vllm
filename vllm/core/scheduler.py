@@ -122,6 +122,10 @@ class Scheduler:
     def get_num_unfinished_seq_groups(self) -> int:
         return len(self.waiting) + len(self.running) + len(self.swapped)
 
+    #重点看_schedule函数，其主要功能是从waiting队列中找到符合token限制的请求，添加到running队列中，然后在scheduled中添加对应的seq_group。
+    # 如果swapped队列不为空，则从running队列中找到最低优先级的seq,然后添加到preempted标记。
+    # swapped队列类似，只不过只有当swapped_out队列为空时才开始调度，最后将调度好的seq放入到running队列中进行后续调度。
+
     # 这个函数是Scheduler类中的一个复杂的私有方法，它尝试安排SequenceGroup实例的执行，
     # 可能需要进行资源的分配、替换和拷贝。函数的主要目的是返回一个SchedulerOutputs对象，
     # 它包含了执行的相关信息。
@@ -361,6 +365,7 @@ class Scheduler:
             seq_group_metadata_list.append(seq_group_metadata)
         return seq_group_metadata_list, scheduler_outputs
 
+    #update函数则是根据当前的找到已完成的block，将其空间释放，如果碰到beam search中的子seq，则将对应的空间释放，并将父seq fork为子seq。
     # 这段代码定义了一个名为update的函数，用于更新序列组的状态并处理新的序列输出。
     def update(
             self,

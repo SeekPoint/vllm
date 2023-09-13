@@ -1,0 +1,63 @@
+https://zhuanlan.zhihu.com/p/654659042
+[vllm]vllm架构分析   ===代码略去
+
+文件目录结构
+benchmark: 测试延迟和吞吐的脚本
+
+csrc: torch下的cuda扩展，一些关键kernels的cpp源码，包含了attention、激活函数、cache等核函数
+
+vllm/core: 关键调度算法，调度策略以及维护cpu和gpu映射的关系表
+
+vllm/engine: llm的engine，包含模型配置，启动模型，请求的前后处理等
+
+vllm/entrypoints: 纯模型生成部分，只包含模型的prompt到token的这部分
+
+vllm/model_executor: 模型op到layer到model组成部分以及包含了各模型的配置
+
+vllm/transformers_utils: tokenizer的一些配置
+
+vllm/worker: 负责分布式调度以及cache的分配 bloclk: 逻辑块和物理块的定义以及基本操作
+
+剩下的是一些配置和工具函数
+关键源码分析
+不难看出，vllm/core，vllm/engine，vllm/worker是vllm架构中的不可缺少的部分，下面来逐一分析。
+
+vllm/core
+vllm/core中存放的是block调度算法，
+分为block_manager、Policy、Scheduler等三部分，其中
+block_manager包含了逻辑块和物理块的相互映射，
+Policy目前还是一个简单的FCFS策略，
+Scheduler中则包含了根据调度策略进行block调度的具体实现。
+这里需要注意的是，
+在vllm/core中的所有分配的block是block mapping，
+在模型实际执行时才会调用cache engine进行内存搬运和运行。
+
+block管理
+block管理的主要功能是建立对应seq_id所对应cpu_block和gpu_block的映射关系，并处理block的分配释放等操作。
+
+首先是block_manager，其中包含了BlockAllocator类，主要作用是分配和释放block，
+使用一个list管理blcok的上限长度，使用引用计数判断block是否为空。
+
+BlockSpaceManager类是block管理的重要类，管理blcok的swap_in、swap_out、free、append_slot、allocate等操作。
+
+Scheduler
+Scheduler是block调度的具体核心实现，包含了waitting、running、swapped等3种状态列表，3种状态列表可以相互转换，
+新放进来的seq会放进waitting队列，每一次_schedule，如果swapped为空，则直接将waiting队列添加到running队列，
+如果swapped队列不为空，则从running队列找到优先级较低的seq，_preempt较低优先级的seq，
+_preempt有两种模式，一种是recompute会将当前seq对应的block置换出，等用到时再重新计算，
+另外一种是swapped则是先放在swapped队列中，也就是cpu block中，等有需要再调度到gpu。
+函数上主要包含了add_seq_group添加请求、abort_seq_group中断请求、schedule调度、update根据已输出token更新调度器、free_seq释放请求资源等操作。
+
+add_seq_group、abort_seq_group、free_seq操作比较简单，如字面意思，不再做详细解读
+
+
+vllm/worker
+worker负责对所有model和engine的封装，驱动模型进行输入输出以及block的管理。
+CacheEngine负责管理分配管理KV Cache,调用自定义的cache算子在实际运行时调用copy、swap_in、swap_out等操作，是对cuda算子的封装。
+
+vllm/engine
+engine是scheduler、worker、cache engine的组合大类，是更进一步的封装，
+其中包含add_request对数据预处理之后放入scheduler队列，在step函数中则调用scheduler得到的swap_in、swap_out，
+通过驱动worker得到output，然后在调用scheduler的update函数对output值进行更新。
+
+发布于 2023-09-06 15:38・IP 属地北京

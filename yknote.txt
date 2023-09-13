@@ -13,7 +13,8 @@ https://zhuanlan.zhihu.com/p/649052223
 LLM推理框架3：llama.cpp/koboldcpp学习
 
 
-
+https://www.youtube.com/watch?v=uih4mtSl7Gs
+vllm-project/vllm - Gource visualisation
 
 https://zhuanlan.zhihu.com/p/645251151 ==架构描述，有图，非代码级别
 vLLM框架top down概览
@@ -21,6 +22,7 @@ vLLM框架top down概览
 https://zhuanlan.zhihu.com/p/641999400  ==架构描述，有图，非代码级别
 LLM 高速推理框架 vLLM 源代码分析 / vLLM Source Code Analysis
 
+https://ai.oldpan.me/t/topic/174  LLM推理框架之vLLM  有动图
 
 https://zhuanlan.zhihu.com/p/648759542
 [Paper Reading] 针对 LLM Inference 的调度: Fast Distributed Inference Serving for Large Language Models

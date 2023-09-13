@@ -122,6 +122,10 @@ class BlockSpaceManager:
         return (num_free_gpu_blocks - num_required_blocks >=
                 self.watermark_blocks)
 
+    # 首先是allocate函数，其生成与logic_token_block相对应数量的gpu_blocks,
+    # 并将block的引用计数增加到group_num，
+    # 更新block_table对应的是seq_id对应的物理块。
+
     # 这段代码定义了BlockSpaceManager类中的allocate成员函数，
     # 该函数用于为给定的seq_group分配PhysicalTokenBlock
     def allocate(self, seq_group: SequenceGroup) -> None:
@@ -165,6 +169,9 @@ class BlockSpaceManager:
         # 如果当前RUNNING状态的序列数量num_seqs小于或等于GPU上的空闲块数量num_free_gpu_blocks，
         # 则返回True（表示可以追加新的slot），否则返回False。
         return num_seqs <= num_free_gpu_blocks
+
+    #对于append_slot函数，则为新添加的token分配新的blcok，这里有个copy on write的优化，
+    # 这里没太看明白，似乎是将原有的block保留，并返回新的block。
 
     # 这段代码定义了BlockSpaceManager类中的append_slot函数，
     # 该函数的主要目标是为一个新的token分配一个物理slot。
@@ -268,6 +275,9 @@ class BlockSpaceManager:
         # 如果是，则返回True，表示该SequenceGroup可以被交换到GPU中；否则，返回False。
         return num_free_blocks - num_required_blocks >= self.watermark_blocks
 
+    #对于swap_in函数，则是将cpu_block从对应的seq中取出，并将cpu_block改为gpu_block，相同的block引用计数+1,释放cpu_block内存，
+    # 然后更新block_table,swap_out操作与此类似，只不过使用了cpu_block和gpu_block的位置相反。
+
     # 这个函数是BlockSpaceManager类的swap_in方法，其作用是将一个序列组(seq_group)从CPU交换到GPU，
     # 并为此过程中涉及的每个CPU块与GPU块创建映射关系。
     def swap_in(self, seq_group: SequenceGroup) -> Dict[int, int]:
@@ -368,6 +378,7 @@ class BlockSpaceManager:
             else:
                 self.cpu_allocator.free(block)
 
+    # free操作则是将seq_id对应的所有block清空，引用计数-1,减为0则标记为空闲。
     # 它的主要任务是释放与指定seq（一个Sequence对象）相关的资源
     def free(self, seq: Sequence) -> None:
         if seq.seq_id not in self.block_tables:
