@@ -191,7 +191,10 @@ def run_single_query_cached_kv_attention(
     max_context_len = max(context_lens)
     context_lens = torch.tensor(context_lens, dtype=torch.int, device='cuda')
 
+    # Create the block tables.
     max_num_blocks_per_seq = (max_context_len + block_size - 1) // block_size
+
+    # 2d数组，每个子数组是一个seq的kv存储的physical block nums
     block_tables = []
     for _ in range(num_tokens):
         block_table = [
@@ -211,6 +214,7 @@ def run_single_query_cached_kv_attention(
         torch.arange(num_kv_heads, dtype=torch.int32, device="cuda"),
                      num_queries_per_kv)
 
+    # 最后传到kernel，输出到output，大功告成
     output = torch.empty(num_tokens,
                          num_heads,
                          head_size,

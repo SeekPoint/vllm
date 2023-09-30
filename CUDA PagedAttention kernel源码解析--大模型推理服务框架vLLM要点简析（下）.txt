@@ -1,0 +1,33 @@
+CUDA PagedAttention kernel源码解析--大模型推理服务框架vLLM要点简析（下）
+
+https://zhuanlan.zhihu.com/p/658233994
+
+之前讲过pagedattention的动机、主要设计思想，还没有看过的朋友可以移步PagedAttention/KV cache--大模型推理服务框架vLLM要点简析 (中)
+
+本文主要讲pagedattention的CUDA kernel实现，注意：省去了一部分不重要的代码，呈现出来的是一些主要部分。
+
+总体来说就是在kv的shape里加入了关于physical block的两个维度，分别是num blocks和block size，表示一个sequence的kv有多少个physical block和block里面有多少token，然后再load kv的数据的时候，根据block table这个data structure获取到每个sequence的physical block ID，从而并行读取数据做attention计算
+
+PagedAttention kernel签名
+可以看到各个输入输出的shape和含义，我额外加了些注释，直接看code snippet即可
+
+.....
+
+python层面的UT
+ut入口在test_attention.py的test_single_query_cached_kv_attention函数，
+重点看看如何创建的block table和kv cache：（其实就是随机初始化了，主要知道里面表示的是什么东西就可以）
+
+..
+
+
+最后
+vLLM的核心point就是pagedattention，另外还有一些额外的idea，
+但是都是基于pagedattention来做的，比如kv cache的dyn memory management，从而取代之前的static memory management，
+解决了三类内存碎片问题，如下图1所示，多数kv cache都被token state充分利用了。
+同时还对不同的decoding sample algo，
+比如parallel sampling，beam search提出了新的针对kv cache在prompt和token generation两个不同阶段的内存共享方法，
+极大的节约了kv cache所占的显存空间，从而可以增大batch size，提升系统吞吐​，如下图2所示。
+012.webp
+013.webp
+
+发布于 2023-09-25 15:33・IP 属地美国

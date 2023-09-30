@@ -5,8 +5,12 @@ VLLM推理流程梳理（一）  BBuf  ==Done
 
 大模型推理服务框架vLLM要点简析 (上)
 https://zhuanlan.zhihu.com/p/654259045
+
 PagedAttention--大模型推理服务框架vLLM要点简析 (中)
 https://zhuanlan.zhihu.com/p/655561941
+
+CUDA PagedAttention kernel源码解析--大模型推理服务框架vLLM要点简析（下）
+https://zhuanlan.zhihu.com/p/658233994
 
 https://zhuanlan.zhihu.com/p/642852847
 LLM推理框架1：exllama学习
