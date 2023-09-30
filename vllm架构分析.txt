@@ -46,7 +46,12 @@ Scheduler是block调度的具体核心实现，包含了waitting、running、swa
 如果swapped队列不为空，则从running队列找到优先级较低的seq，_preempt较低优先级的seq，
 _preempt有两种模式，一种是recompute会将当前seq对应的block置换出，等用到时再重新计算，
 另外一种是swapped则是先放在swapped队列中，也就是cpu block中，等有需要再调度到gpu。
-函数上主要包含了add_seq_group添加请求、abort_seq_group中断请求、schedule调度、update根据已输出token更新调度器、free_seq释放请求资源等操作。
+函数上主要包含了
+add_seq_group添加请求、
+abort_seq_group中断请求、
+schedule调度、
+update根据已输出token更新调度器、
+free_seq释放请求资源等操作。
 
 add_seq_group、abort_seq_group、free_seq操作比较简单，如字面意思，不再做详细解读
 
@@ -59,5 +64,8 @@ vllm/engine
 engine是scheduler、worker、cache engine的组合大类，是更进一步的封装，
 其中包含add_request对数据预处理之后放入scheduler队列，在step函数中则调用scheduler得到的swap_in、swap_out，
 通过驱动worker得到output，然后在调用scheduler的update函数对output值进行更新。
+
+
+
 
 发布于 2023-09-06 15:38・IP 属地北京

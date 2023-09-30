@@ -65,6 +65,35 @@ inline __device__ float block_sum(float* red_smem, float sum) {
   return __shfl_sync(uint32_t(-1), sum, 0);
 }
 
+/*
+single_query attention 核函数
+Attention的分group，分group分wrap实现，group是由block大小决定的，
+当block>32时，每个wrap实现了一个group,否则在一个wrap中实现多个group.
+
+首先blcok_size对应的是vllm调度的页块大小。
+这里我们考虑BLOCK_SIZE(token数)大于32的情况，也就是THREAD_GROUP_SIZE可以视为1，
+表示每个group中的线程数，一共有NUM_THREAD_GROUPS个group。
+thread_group_idx标记对应的group_idx, 当一个group时值为0, thread_group_offset标记group内的offset。
+
+NUM_TOKENS_PER_THREAD_GROUP保存的是每个wrap中要处理的token数，
+每个THREAD_GROUP都交给一个wrap去处理，一共需要NUM_WARPS个wraps。
+warp_idx保存的是warp id, lane则标记了wrap中的lane id。
+
+head_idx标记GPU BLOCKs，也即每个GPU Blocks计算一个head，num_heads标记使用的GPU BLOCKs总数，也即head num；
+seq_idx标记的是第二维GPU BLOCKs， 也即seq的位置。
+
+所以每个block内要加载head_dims(因为group为1)个数据， 对于这么多数据，要按照vec以16bit的方式进行划分，
+主要为了计算更多量化后的数据，在group为1的float32情况下，可以理解为4个数一起算。
+
+每次计算q_vecs，其大小为1\*head_dims/4\*4大小的数据，这里最后一个4为一次性计算16bit 4个数，4个作为一个存取单位。
+
+分配red_smem[2\*NUM_WARPS]为reduce所用，保留的时warp内的局部最大值。
+后面计算了qvec的dot结果保存为qk，先在group内reduce计算得到局部最大值，然后在每个wrap内reduce计算得到全局最大值为qk_max。
+执行exp(x-qk_max)并得到每个wrap上的exp_sum，规约得全局的exp_sum,计算每个节点上的softmax。
+
+计算qk\*v的过程与上述计算qk的过程类似，结果存储在accs中，注意这里使用了fp32模式以防止累加过程中的精度损失。
+在将结果写回到dest的过程中，使用mid上半段的存储缓存，使用mid下半段的部分将结果reduce，当warp_idx==0时，将所有结果写回到每一行中。
+*/
 // Grid: (num_heads, num_seqs).
 template<
   typename scalar_t,

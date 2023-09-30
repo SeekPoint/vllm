@@ -5,6 +5,15 @@
 
 namespace vllm {
 
+/*
+rms_norm核函数
+rms核函数按照不同的token数划分，所以一共有num_tokens个block，每个block内开多个线程去执行rms算子。
+
+平方和也在block内部计算，每个线程累加了部分和，使用FT中的函数BlockReduceSum计算所有结果的平方和，
+规约到线程0处，然后更新不同token的output得到结果。
+
+*/
+
 // TODO(woosuk): Further optimize this kernel.
 template<typename scalar_t>
 __global__ void rms_norm_kernel(

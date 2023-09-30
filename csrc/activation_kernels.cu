@@ -3,6 +3,11 @@
 
 namespace vllm {
 
+// silu_mult
+// silu_mult是融合算子，将silu与下一步的乘加运算融合到一起进行计算。
+// silu函数很容易理解，就是按照silu公式写的函数。 怀疑silu_mult中input的2d是相同的值，
+// 那么对应的公式便是 y = x * silu(x)
+// ldg的作用：ldg会将数据从全局内存中搬运到blcok内的纹理缓存中。
 template<typename T>
 __device__ __forceinline__ T silu(const T& x) {
   // x * sigmoid(x)

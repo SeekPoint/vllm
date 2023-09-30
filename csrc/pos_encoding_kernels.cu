@@ -2,7 +2,13 @@
 #include <ATen/cuda/CUDAContext.h>
 
 namespace vllm {
+/*
+pos_embedding
+功能是旋转位置编码，按照公式直接计算即可。
 
+比较有意思的是这里offset的分割是比较清晰的，每个block内的多线程计算的是每个句子对应的多头位置编码，
+也就是每次一个block计算都会将一个sentence token的位置编码计算出来。
+*/
 template<typename scalar_t>
 __global__ void rotary_embedding_neox_kernel(
   const int64_t* __restrict__ positions,        // [num_tokens]

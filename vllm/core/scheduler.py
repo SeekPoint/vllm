@@ -365,7 +365,8 @@ class Scheduler:
             seq_group_metadata_list.append(seq_group_metadata)
         return seq_group_metadata_list, scheduler_outputs
 
-    #update函数则是根据当前的找到已完成的block，将其空间释放，如果碰到beam search中的子seq，则将对应的空间释放，并将父seq fork为子seq。
+    # update函数则是根据当前的找到已完成的block，将其空间释放，
+    # 如果碰到beam search中的子seq，则将对应的空间释放，并将父seq fork为子seq。
     # 这段代码定义了一个名为update的函数，用于更新序列组的状态并处理新的序列输出。
     def update(
             self,

@@ -3,7 +3,10 @@ VLLM推理流程梳理（二）  BBuf  ==Done
 https://zhuanlan.zhihu.com/p/649974825
 VLLM推理流程梳理（一）  BBuf  ==Done
 
-
+大模型推理服务框架vLLM要点简析 (上)
+https://zhuanlan.zhihu.com/p/654259045
+PagedAttention--大模型推理服务框架vLLM要点简析 (中)
+https://zhuanlan.zhihu.com/p/655561941
 
 https://zhuanlan.zhihu.com/p/642852847
 LLM推理框架1：exllama学习
@@ -11,6 +14,11 @@ LLM推理框架1：exllama学习
 https://zhuanlan.zhihu.com/p/649052223
 LLM推理框架3：llama.cpp/koboldcpp学习
 
+https://zhuanlan.zhihu.com/p/649588600
+PagedAttention
+
+https://zhuanlan.zhihu.com/p/655872477
+如何利用vLLM框架快速部署LLama2
 
 https://www.youtube.com/watch?v=uih4mtSl7Gs
 vllm-project/vllm - Gource visualisation

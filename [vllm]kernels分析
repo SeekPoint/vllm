@@ -1,0 +1,39 @@
+[vllm]kernels分析
+
+https://zhuanlan.zhihu.com/p/657114963
+
+vllm kernels分析
+接着上一节的架构分析，vllm的csrc目录下有一些手动实现的核函数，在上一节没有具体分析，这节详细来看看。
+
+文件结构
+csrc/activation_kernels:对应的silu和gelu激活函数
+
+csrc/attention: 存放的是sq_kv_attention函数
+
+csrc/cache:包含了cache_engine中使用的内存copy、swap_in、swap_out等内存block交换操作核函数
+
+csrc/layernorm: 包含了layernorm函数的核函数实现
+
+csrc/pos_encoding_kernels: 包含了rotary_embedding_neox的核函数
+
+....
+
+gelu核
+gelu激活函数也是按照原有公式进行直接计算，没太多好说的，这里fast的一个优化是提取了x的共因子，因此增加了kernels的运行速度。
+
+template<typename T>
+__device__ __forceinline__ T gelu_new_kernel(const T& x) {
+  const float x3 = (float) (x * x * x);
+  const T t = (T) tanhf((T) (0.79788456f * (float) (x + (T) (0.044715f * x3))));
+  return ((T) 0.5) * x * (((T) 1.0) + t);
+}
+
+template<typename T>
+__device__ __forceinline__ T gelu_fast_kernel(const T& x) {
+  const float f = (float) x;
+  const T t = (T) tanhf(((T) (f * 0.79788456f)) * (((T) 1.0) + (T) (0.044715f * f) * x));
+  return ((T) 0.5) * x * (((T) 1.0) + t);
+}
+
+.....
+
