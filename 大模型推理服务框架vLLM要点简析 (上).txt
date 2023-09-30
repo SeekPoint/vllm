@@ -1,0 +1,92 @@
+
+大模型推理服务框架vLLM要点简析 (上)
+
+https://zhuanlan.zhihu.com/p/654259045
+
+
+当前的大模型推理服务框架非常多，大都大同小异，本文选择了vLLM来做一个简单的赏析。为了读者可以快速浏览完，文章尽可能精简。
+如果觉得有帮助，可以点击“在看”哦~先行感谢
+
+vLLM是一个大模型推理服务框架，声称
+
+    最牛的serving 吞吐量
+    PagedAttention对kv cache的有效管理
+    传入请求的continus batching，而不是static batching
+    高性能CUDA kernel
+    流行的HuggingFace模型无缝集成
+    有各种decoder算法的高吞吐量服务，包括parallel sampling和beam search等
+    tensor parallel
+    兼容OpenAI的API服务器
+
+支持的模型确实挺多的：
+
+    Aquila (BAAI/Aquila-7B, BAAI/AquilaChat-7B, etc.)
+    Baichuan (baichuan-inc/Baichuan-7B, baichuan-inc/Baichuan-13B-Chat, etc.)
+    BLOOM (bigscience/bloom, bigscience/bloomz, etc.)
+    Falcon (tiiuae/falcon-7b, tiiuae/falcon-40b, tiiuae/falcon-rw-7b, etc.)
+    GPT-2 (gpt2, gpt2-xl, etc.)
+    GPT BigCode (bigcode/starcoder, bigcode/gpt_bigcode-santacoder, etc.)
+    GPT-J (EleutherAI/gpt-j-6b, nomic-ai/gpt4all-j, etc.)
+    GPT-NeoX (EleutherAI/gpt-neox-20b, databricks/dolly-v2-12b, stabilityai/stablelm-tuned-alpha-7b, etc.)
+    InternLM (internlm/internlm-7b, internlm/internlm-chat-7b, etc.)
+    LLaMA & LLaMA-2 (meta-llama/Llama-2-70b-hf, lmsys/vicuna-13b-v1.3, young-geng/koala, openlm-research/open_llama_13b, etc.)
+    MPT (mosaicml/mpt-7b, mosaicml/mpt-30b, etc.)
+    OPT (facebook/opt-66b, facebook/opt-iml-max-30b, etc.)
+    Qwen (Qwen/Qwen-7B, Qwen/Qwen-7B-Chat, etc.)
+
+个人觉得有意思的东西其实主要是两个，continus batching和PagedAttention，
+
+本文为上集，主要讲讲continus batching。
+
+LLM decoder推理基础
+分为两步：如下图，黄色为prompt，蓝色为每个token generation
+
+    prompt
+
+    LLM生成一个完整token序列，当遇到stop token或最大句子长度就停止
+014.webp
+
+
+LLM decoder推理是memory bound的，
+这意味着推理throughput很大程度取决于你能喂进HBM显存多大的batch size，而不是GPU算力越高，吞吐越大。
+HBM的消耗随着model size和句子seqlen而变化，13b参数的模型对于seq中每个token的state都要花1M空间，
+那么对于A100-40G, 13b参数占了26g，还剩14g可以保存14k token的state，
+如果我们设seqlen为512，那么bs最大为28，如果seqlen=2048，那么bs最大为7；这是一个上限数字，因为还没算中间tensor的memory占用；
+
+所以量化即quantization在LLM里面很有用，可以加大单卡上的batchsize和seqlen，
+但是这要去修改模型的weights，也有不用修改weights的，比如flashattention，
+以及下文要提到的continuous batching，它们都提升了memory IO effeciency
+
+LLM batching
+问题描述：LLM batching比较tricky，因为它们的推理具有迭代性质。
+这是因为某些客户端请求可以在batching中很早就完成，但释放其资源并向可能处于不同完成状态的batch中添加新客户端请求非常麻烦。
+这意味着GPU未被充分利用，因为一个batch中不同seq的生成长度不同于batch的最大生成长度，
+比如下图中，seq1生成了2个token，3生成了1个，4生成了2个，然而2生成了5个，seq1、3、4结束标记后的白色方块就是GPU在空闲，
+什么都没有做，此时GPU利用率非常低，传统的static batching不能把白色空闲时间利用起来。
+015.webp
+
+那么static batching对GPU利用不足的频率是多少？这个主要取决于一个batch中这些句子的生成长度，
+比如分类任务，每个seq的输出长度都是1，比如聊天任务，那就不一了，那这样就会低效利用GPU
+
+continus batching
+解决方案：简单来说，一旦一个batch中的某个seq完成生成，发射了一个end-of-seq token，就可以在其位置插入新的seq继续生成token，从而达到比static batching更高的GPU利用率。
+016.webp
+
+具体的方案在这篇paper里面，大家感兴趣自行搜索下载，
+讲的非常清楚：《Orca:A Distributed Serving System for Transformer Based Generative Models》，
+这是一篇发表在操作系统顶会OSDI上的论文，是第一篇提出解决static batching的paper，vLLM也是在它的基础上完成的实现。
+
+发布于 2023-09-04 17:46・IP 属地美国
+
+
+发布一条带图评论吧
+
+会不会出现插了新的之后，这个新的后面生成的长度不够（最大长度-旧的）的情况。。
+
+
+continus batching
+解决方案：简单来说，一旦一个batch中的某个seq完成生成，发射了一个end-of-seq token，
+就可以在其位置插入新的seq继续生成token，从而达到比static batching更高的GPU利用率。
+
+插入新的seq：插哪个seq？
+
