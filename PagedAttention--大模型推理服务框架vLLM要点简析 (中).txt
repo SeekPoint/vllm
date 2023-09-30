@@ -1,0 +1,59 @@
+PagedAttention--大模型推理服务框架vLLM要点简析 (中)
+
+https://zhuanlan.zhihu.com/p/655561941
+
+PagedAttention是对kv cache所占空间的分页管理，是一个典型的以内存空间换计算开销的手段，
+vllm和tenorRT-llm都应用了这个手段来节约kv cache占用的memory，
+和现今大模型训练的recompute中间activation用于bwd的以计算开销换内存空间的手段恰好相反。
+本文先解析一下pagedattention的理论部分，下节解析源代码部分。
+
+kv cache出现的动机
+decoder推理中，对于每个输入的 prompt，在计算第一个 token 输出的时候，每个 token 的 attention 肯定是都要从头计算,
+但是在后续 token 的生成中，需要concat前面每一个 token 的 K 和 V，由于模型参数矩阵是不变的，
+此时只有刚生成的那个 token 的 K 和 V 需要从头计算，所以可以把之前token的K和V缓存起来避免重复计算，这个就叫kv cache
+
+kv cache占用的显存空间
+每个decoder layer，每个 token 的 K、V 矩阵都是 embedding_size=num_heads * head_size，
+再乘上 seqlen和 batch size，那就是每个layer的 kv Cache 所需的存储容量了。
+例如，如果 batch size = 8，在 LLaMA 2-70B 中，
+80 层layer的 KV Cache 一共需要 80 * 8192 * 4096 * 8 * 2Byte = 40 GB。
+相比 LLaMA 2-70B(fp16)的140 GB 的参数量，其实还好
+
+kv cache能省下的FLOPs
+每个token的 K、V 矩阵计算一共需要
+2 (K+V) * 2 (mul+add) * embedding size * embedding size = 4 * 8192 * 8192 这么多计算量，
+乘以seqlen、num_layer和 batch size，一共省了 4096 * 80 * 8 * 4 * 8192 * 8192 = 640 TFLOPs的计算量，
+当然，因seqlen和embedding size和num layer而异。
+
+计算kv读取的weight大小和读取时间
+K=input乘Wk，V=input乘Wv，我们还需要去显存中读取这两个linear的weight，
+weight的shape为[batch size, seqlen, embedding size, embedding size]，
+还是带入以上的取值，那么这两个weight的参数量为4096 * 80 * 2 * 8192 * 8192 ,
+查阅A100和H100的显存带宽可以知道，已经是最先进的HBM了，不是老的GDDR了，A100 HBM带宽为2 TB/s，H100 HBM带宽为3.35 TB/s，
+那么带宽/参数大小就是读取时间，大约有几十秒，这显然延迟太高了，
+还不说每次token generation都要去读然后来计算K V，
+所以kv cache非常有必要，即使占了很大显存都要用。
+
+pagedattention出现动机
+既然kv cache这么牛逼，那直接用啊，为啥又出来个pagedattention？
+
+虽然kv cache很重要，但是kv cache所占的空间也确实是大且有浪费的，所以出现了pagedattention来解决浪费问题。
+kv cache大小取决于seqlen，然而这个东西对于每个batch里面的seq来说是变化的，毕竟不同的人输入不同长度的问题，
+模型有不同长度的答案回答，kv cache统一按照max seq len来申请，造成现有decoder推理系统浪费了很多显存。
+
+pagedattention的设计
+PagedAttention的核心是一张表，类似于OS的page table，这里叫block table，记录每个seq的kv分布在哪个physical block上，
+通过把每个seq的kv cache划分为固定大小的physical block，每个block包含了每个句子某几个tokens的一部分kv，允许连续的kv可以不连续分布。
+在attention compute的时候，pagedattention CUDA kernel就通过block table拿到对应的physical block序号，
+然后CUDA线程ID计算每个seq每个token的offset从而fetch相应的block，拿到kv，继续做attention的计算
+
+如下图，解释一下paged attention的工作流程。可以看到，内存浪费仅仅发生在一个seq的最后一个block，即最后一张图的block3
+
+。。。。。
+00001.gif
+
+下节将介绍一下pagedattention的源码实现，
+和原来decoder attention计算的不同主要在于读取kv cache的offset计算发生了变化，
+以及引入了block table这个数据结构
+
+发布于 2023-09-11 15:26・IP 属地美国
